@@ -1,0 +1,232 @@
+MAX30100 + OLED
+
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include "MAX30100_PulseOximeter.h"
+
+// SPI OLED pins for ESP8266
+#define OLED_MOSI   D7   // GPIO13
+#define OLED_CLK    D5   // GPIO14
+#define OLED_DC     D3   // GPIO12
+#define OLED_CS     D8   // GPIO15
+#define OLED_RESET  D4   // GPIO0
+
+// OLED object
+Adafruit_SSD1306 oled(128, 64, &SPI, OLED_DC, OLED_RESET, OLED_CS);
+
+// MAX30100 object
+PulseOximeter pox;
+uint32_t tsLastReport = 0;
+
+void setup() {
+  Serial.begin(115200);
+
+  // I2C for MAX30100 on ESP8266 (D2 = SDA, D1 = SCL)
+  Wire.begin(D2, D1);
+
+  // Init OLED
+  if (!oled.begin(SSD1306_SWITCHCAPVCC)) {
+    Serial.println("SSD1306 SPI OLED init failed!");
+    while (1);
+  }
+  oled.clearDisplay();
+  oled.setTextSize(2);
+  oled.setTextColor(SSD1306_WHITE);
+
+  // Init MAX30100
+  Serial.println("Initializing MAX30100...");
+  if (!pox.begin()) {
+    Serial.println("FAILED to initialize MAX30100");
+    while (1);
+  } else {
+    Serial.println("MAX30100 Ready!");
+  }
+
+  pox.setIRLedCurrent(MAX30100_LED_CURR_7_6MA);
+}
+
+void loop() {
+  pox.update();
+
+  if (millis() - tsLastReport > 1000) {
+    float hr = pox.getHeartRate();
+    float spo2 = pox.getSpO2();
+
+    // Serial output
+    Serial.print("Heart rate: ");
+    Serial.print(hr);
+    Serial.print(" bpm / SpO2: ");
+    Serial.print(spo2);
+    Serial.println(" %");
+
+    // OLED output
+    oled.clearDisplay();
+    oled.setCursor(0, 0);
+    oled.println("MAX30100 Data");
+    oled.print("HR: "); oled.print(hr); oled.println(" bpm");
+    oled.print("SpO2: "); oled.print(spo2); oled.println(" %");
+    oled.display();
+
+    tsLastReport = millis();
+  }
+}
+
+
+
+
+MPU6050 + OLED
+
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <MPU6050.h>
+
+// SPI OLED pins for ESP8266
+#define OLED_MOSI   D7   // GPIO13
+#define OLED_CLK    D5   // GPIO14
+#define OLED_DC     D3   // GPIO12
+#define OLED_CS     D8   // GPIO15
+#define OLED_RESET  D4   // GPIO0
+
+// OLED object
+Adafruit_SSD1306 oled(128, 64, &SPI, OLED_DC, OLED_RESET, OLED_CS);
+
+// MPU6050 object (I2C)
+MPU6050 mpu;
+
+long stepCount = 0;
+int16_t ax, ay, az;
+float accelMagnitude;
+float threshold = 15000;   // Adjust experimentally
+bool stepDetected = false;
+
+void setup() {
+  Serial.begin(115200);
+
+  // I2C for MPU6050 on ESP8266 (D2 = SDA, D1 = SCL)
+  Wire.begin(D2, D1);
+
+  // OLED init (SPI)
+  if (!oled.begin(SSD1306_SWITCHCAPVCC)) {
+    Serial.println("SSD1306 SPI OLED init failed!");
+    while (1);
+  }
+  oled.clearDisplay();
+  oled.setTextSize(1);
+  oled.setTextColor(SSD1306_WHITE);
+
+  // MPU init
+  Serial.println("Initializing MPU6050...");
+  mpu.initialize();
+  if (!mpu.testConnection()) {
+    Serial.println("MPU6050 connection failed!");
+    while (1);
+  }
+  Serial.println("MPU6050 ready!");
+}
+
+void loop() {
+  // Read accel values
+  mpu.getAcceleration(&ax, &ay, &az);
+
+  // Calculate magnitude of acceleration vector
+  accelMagnitude = sqrt((long)ax * ax + (long)ay * ay + (long)az * az);
+
+  // Step detection (threshold crossing)
+  if (accelMagnitude > threshold && !stepDetected) {
+    stepCount++;
+    stepDetected = true;
+  }
+  if (accelMagnitude < threshold) {
+    stepDetected = false;  // Reset trigger
+  }
+
+  // Serial output
+  Serial.print("Steps: ");
+  Serial.println(stepCount);
+
+  // OLED output
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  oled.println("MPU6050 is Working");
+  oled.print("Steps: ");
+  oled.println(stepCount);
+  oled.display();
+
+  delay(100);
+}
+
+
+
+BMP180 +OLED
+
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_BMP085.h>  // for BMP180
+
+// SPI OLED pins for ESP8266
+#define OLED_MOSI   D7   // GPIO13
+#define OLED_CLK    D5   // GPIO14
+#define OLED_DC     D3   // GPIO12
+#define OLED_CS     D8   // GPIO15
+#define OLED_RESET  D4   // GPIO0
+
+// OLED object
+Adafruit_SSD1306 oled(128, 64, &SPI, OLED_DC, OLED_RESET, OLED_CS);
+
+// BMP180 object (I2C)
+Adafruit_BMP085 bmp;
+
+// Adjust this offset based on real thermometer reading
+float tempOffset = -3.5;  // Example: subtract 3.5°C
+
+void setup() {
+  Serial.begin(115200);
+
+  // I2C for BMP180 on ESP8266 (D2 = SDA, D1 = SCL)
+  Wire.begin(D2, D1);
+
+  // OLED init (SPI)
+  if (!oled.begin(SSD1306_SWITCHCAPVCC)) {
+    Serial.println("SSD1306 SPI OLED init failed!");
+    while (1);
+  }
+  oled.clearDisplay();
+  oled.setTextSize(1);
+  oled.setTextColor(SSD1306_WHITE);
+
+  // BMP180 init
+  if (!bmp.begin()) {
+    Serial.println("BMP180 not found!");
+    while (1);
+  }
+  Serial.println("BMP180 ready!");
+}
+
+void loop() {
+  float temp = bmp.readTemperature() + tempOffset;   // corrected temperature
+  long pressure = bmp.readPressure();
+  float altitude = bmp.readAltitude(101325);  // normalize to sea-level pressure
+
+  // Serial output
+  Serial.print("Temp: "); Serial.print(temp); Serial.print(" C, ");
+  Serial.print("Pressure: "); Serial.print(pressure / 100.0); Serial.print(" hPa, ");
+  Serial.print("Alt: "); Serial.print(altitude); Serial.println(" m");
+
+  // OLED output
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  oled.println("BMP180 Data");
+  oled.print("Temp: "); oled.print(temp, 1); oled.println(" C");
+  oled.print("Pres: "); oled.print(pressure / 100.0, 1); oled.println(" hPa");
+  oled.print("Alt: "); oled.print(altitude, 1); oled.println(" m");
+  oled.display();
+
+  delay(1000);
+}
+
